@@ -71,17 +71,11 @@ class FalconDecoder(TransformerDecoder[FalconConfig], FromHFHub):
             device=device,
         )
 
-        if config.new_decoder_architecture:
-            decoder_layer = partial(
-                self._create_new_decoder_architecture_layer, config, device
-            )
-        else:
-            decoder_layer = partial(
-                self._create_old_decoder_architecture_layer, config, device
-            )
-
         self.layers = ModuleList(
-            [decoder_layer() for _ in range(config.layer.n_hidden_layers)]
+            [
+                OldFalconDecoderLayer(config.layer, device=device)
+                for _ in range(config.layer.n_hidden_layers)
+            ]
         )
 
         self.output_layer_norm = LayerNorm(
@@ -115,78 +109,3 @@ class FalconDecoder(TransformerDecoder[FalconConfig], FromHFHub):
     ) -> Self:
         config = convert_hf_config(hf_config)
         return cls(config, device=device)
-
-    def _create_old_decoder_architecture_layer(
-        self, config: FalconConfig, device: Optional[torch.device]
-    ):
-        return OldFalconDecoderLayer(config.layer, device=device)
-
-    def _create_new_decoder_architecture_layer(
-        self, config: FalconConfig, device: Optional[torch.device]
-    ):
-        if config.layer.attention.rotary_embeddings is None:
-            raise ValueError(
-                "Falcon attention config does not contain rotary embedding parameters"
-            )
-
-        hidden_width = config.layer.feedforward.hidden_width
-        layer_norm = partial(
-            LayerNorm,
-            hidden_width,
-            config.layer.layer_norm_eps,
-            device=device,
-        )
-        n_attention_heads = config.layer.attention.n_query_heads
-        attention_biases = (
-            AttentionLinearBiases(
-                n_attention_heads=config.layer.attention.n_query_heads,
-                is_causal=True,
-                is_inverted=True,
-            )
-            if config.layer.attention.use_alibi
-            else None
-        )
-        # Rotary embeddings are disabled when using ALiBi.
-        rotary_embeds = (
-            QueryKeyRotaryEmbeddings(
-                fraction=config.layer.attention.rotary_embeddings.rotary_fraction,
-                base=config.layer.attention.rotary_embeddings.rotary_base,
-                head_width=hidden_width // n_attention_heads,
-            )
-            if not config.layer.attention.use_alibi
-            else None
-        )
-        return DecoderLayer(
-            attention_layer=SelfAttention(
-                attention_heads=AttentionHeads.key_value_broadcast(
-                    n_query_heads=n_attention_heads,
-                    n_key_value_heads=config.layer.attention.n_key_value_heads,
-                ),
-                attention_scorer=ScaledDotProductAttention(
-                    dropout_prob=config.layer.attention.dropout_prob,
-                    linear_biases=attention_biases,
-                ),
-                hidden_width=hidden_width,
-                qkv_mode=QkvMode.MERGED_SPLIT_AFTER,
-                rotary_embeds=rotary_embeds,
-                use_bias=config.layer.attention.use_bias,
-                device=device,
-            ),
-            feed_forward_layer=PointwiseFeedForward(
-                activation=config.layer.feedforward.activation.module(),
-                hidden_width=hidden_width,
-                intermediate_width=config.layer.feedforward.intermediate_width,
-                use_bias=config.layer.feedforward.use_bias,
-                use_gate=config.layer.feedforward.use_gate,
-                device=device,
-            ),
-            dropouts=TransformerDropouts.parallel_attention_dropout(
-                config.layer.dropout_prob
-            ),
-            layer_norms=TransformerLayerNorms(
-                attn_input_layer_norm=layer_norm(),
-                ffn_input_layer_norm=layer_norm(),
-            ),
-            # The new decoder uses parallel attention unconditionally.
-            use_parallel_attention=True,
-        )

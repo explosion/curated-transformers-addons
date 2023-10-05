@@ -87,24 +87,10 @@ def _convert_hf_config_refined_web_model(hf_config: Any) -> FalconConfig:
         "Falcon", hf_config, HF_CONFIG_KEY_MAPPING_REFINED_WEB_MODEL, EXTRA_KWARG_KEYS
     )
 
-    # For the old configuration format, we can only figure out whether to use
-    # the new decoder architecture by checking if `n_head_kv` is present.
-    new_decoder_architecture = "n_head_kv" in hf_config
-    kwargs["new_decoder_architecture"] = new_decoder_architecture
-
-    if new_decoder_architecture:
-        if "n_head_kv" in hf_config:
-            kwargs["n_key_value_heads"] = hf_config["n_head_kv"]
-        else:
-            raise ValueError(
-                f"Hugging Face Falcon config with new decoder architecture must contain `n_head_kv`"
-            )
+    if hf_config.get("multi_query", False):
+        kwargs["n_key_value_heads"] = 1
     else:
-        kwargs["new_decoder_architecture"] = False
-        if hf_config.get("multi_query", False):
-            kwargs["n_key_value_heads"] = 1
-        else:
-            kwargs["n_key_value_heads"] = kwargs["n_query_heads"]
+        kwargs["n_key_value_heads"] = kwargs["n_query_heads"]
 
     if "alibi" in hf_config and hf_config["alibi"]:
         raise ValueError("Falcon models with ALiBi are currently not supported")
@@ -121,21 +107,10 @@ def _convert_hf_config_falcon(hf_config: Any) -> FalconConfig:
         "Falcon", hf_config, HF_CONFIG_KEY_MAPPING_FALCON, EXTRA_KWARG_KEYS
     )
 
-    new_decoder_architecture = hf_config.get("new_decoder_architecture", False)
-    kwargs["new_decoder_architecture"] = new_decoder_architecture
-
-    if new_decoder_architecture:
-        if "num_kv_heads" in hf_config:
-            kwargs["n_key_value_heads"] = hf_config["num_kv_heads"]
-        else:
-            raise ValueError(
-                f"Hugging Face Falcon config with new decoder architecture must contain `num_kv_heads`"
-            )
+    if hf_config.get("multi_query", False):
+        kwargs["n_key_value_heads"] = 1
     else:
-        if hf_config.get("multi_query", False):
-            kwargs["n_key_value_heads"] = 1
-        else:
-            kwargs["n_key_value_heads"] = kwargs["n_query_heads"]
+        kwargs["n_key_value_heads"] = kwargs["n_query_heads"]
 
     return FalconConfig(
         rotary_embedding_base=10000,

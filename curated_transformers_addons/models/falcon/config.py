@@ -21,8 +21,6 @@ class FalconConfig(TransformerConfig):
     .. _Penedo et al., 2019: https://arxiv.org/abs/2306.01116
     """
 
-    new_decoder_architecture: bool
-
     def __init__(
         self,
         *,
@@ -30,7 +28,6 @@ class FalconConfig(TransformerConfig):
         hidden_dropout_prob: float = 0.0,
         hidden_width: int = 2560,
         layer_norm_eps: float = 1e-5,
-        new_decoder_architecture: bool = False,
         n_query_heads: int = 71,
         n_key_value_heads: int = 1,
         n_hidden_layers: int = 32,
@@ -110,4 +107,3 @@ class FalconConfig(TransformerConfig):
             n_hidden_layers=n_hidden_layers,
         )
         self.dtype = torch.bfloat16
-        self.new_decoder_architecture = new_decoder_architecture
