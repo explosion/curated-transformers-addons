@@ -1,4 +1,4 @@
-from .falcon import FalconCausalLM, FalconConfig, FalconDecoder, OldFalconDecoderLayer
+from .falcon import FalconCausalLM, FalconConfig, FalconDecoder
 
 __all__ = [
     "FalconCausalLM",
